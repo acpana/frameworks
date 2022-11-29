@@ -574,18 +574,28 @@ func (c *Client) review(ctx context.Context, target string, constraints []*unstr
 	var results []*types.Result
 	var tracesBuilder strings.Builder
 
-	results, trace, err := c.driver.Query(ctx, target, constraints, review, opts...)
-	if err != nil {
-		return nil, err
+	// sequenitally call .Query for one constraint
+	for _, constraint := range constraints {
+		oneConstraints := []*unstructured.Unstructured{constraint}
+		res, trace, err := c.driver.Query(ctx, target, oneConstraints, review, opts...)
+
+		if err != nil {
+			return nil, err // todo(acpana): behavior change
+		}
+
+		if trace != nil {
+			tracesBuilder.WriteString(*trace)
+			tracesBuilder.WriteString("\n\n")
+		}
+
+		for _, oneRes := range res {
+			results = append(results, oneRes)
+		}
 	}
 
-	if trace != nil {
-		tracesBuilder.WriteString(*trace)
-		tracesBuilder.WriteString("\n\n")
-	}
-
+	allTraces := tracesBuilder.String()
 	return &types.Response{
-		Trace:   trace,
+		Trace:   &allTraces,
 		Target:  target,
 		Results: results,
 	}, nil
