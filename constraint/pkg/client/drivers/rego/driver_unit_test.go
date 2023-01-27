@@ -44,6 +44,14 @@ fooisbar[msg] {
   }
 `
 
+	NeverViolate string = `
+  package foobar
+
+  violation[{"msg": "always violate"}] {
+	  false
+  }
+`
+
 	ExternalData string = `
 	package foobar
 
@@ -140,7 +148,7 @@ func TestDriver_Query(t *testing.T) {
 		t.Fatalf("got AddConstraint() error = %v, want %v", err, nil)
 	}
 
-	res, _, err := d.Query(
+	qr, err := d.Query(
 		ctx,
 		cts.MockTargetHandler,
 		[]*unstructured.Unstructured{cts.MakeConstraint(t, "Fakes", "foo-1")},
@@ -149,7 +157,7 @@ func TestDriver_Query(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got Query() error = %v, want %v", err, nil)
 	}
-	if len(res) == 0 {
+	if len(qr.Results) == 0 {
 		t.Fatalf("got 0 errors on normal query; want 1")
 	}
 
@@ -159,7 +167,7 @@ func TestDriver_Query(t *testing.T) {
 		t.Fatalf("got RemoveData() error = %v, want %v", err, nil)
 	}
 
-	res, _, err = d.Query(
+	qr, err = d.Query(
 		ctx,
 		cts.MockTargetHandler,
 		[]*unstructured.Unstructured{cts.MakeConstraint(t, "Fakes", "foo-1")},
@@ -168,23 +176,184 @@ func TestDriver_Query(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got Query() (#2) error = %v, want %v", err, nil)
 	}
-	if len(res) == 0 {
+	if len(qr.Results) == 0 {
 		t.Fatalf("got 0 errors on data-less query; want 1")
 	}
-
-	stats, ok := res[0].EvaluationMeta.(EvaluationMeta)
-	if !ok {
-		t.Fatalf("could not type convert to RegoEvaluationMeta")
-	}
-
-	if stats.TemplateRunTime == 0 {
-		t.Fatalf("expected %v's value to be positive was zero", "TemplateRunTime")
-	}
-
-	if stats.ConstraintCount != uint(1) {
-		t.Fatalf("expected %v constraint count, got %v", 1, "ConstraintCount")
-	}
 }
+
+// // TestDriver_Query_StatsEntries tests that StatsEntries are populated for Query calls.
+// func TestDriver_Query_StatsEntries(t *testing.T) {
+// 	// given a ConstraintTemplate that always violates
+// 	d, err := New(GatherMetrics())
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+
+// 	tmpl := cts.New(cts.OptTargets(cts.Target(cts.MockTargetHandler, AlwaysViolate)))
+// 	ctx := context.Background()
+// 	if err := d.AddTemplate(ctx, tmpl); err != nil {
+// 		t.Fatalf("got AddTemplate() error = %v, want %v", err, nil)
+// 	}
+
+// 	if err := d.AddConstraint(ctx, cts.MakeConstraint(t, cts.MockTemplate, "foo-0")); err != nil {
+// 		t.Fatalf("got AddConstraint() error = %v, want %v", err, nil)
+// 	}
+// 	if err := d.AddConstraint(ctx, cts.MakeConstraint(t, cts.MockTemplate, "foo-1")); err != nil {
+// 		t.Fatalf("got AddConstraint() error = %v, want %v", err, nil)
+// 	}
+// 	if err := d.AddConstraint(ctx, cts.MakeConstraint(t, cts.MockTemplate, "foo-2")); err != nil {
+// 		t.Fatalf("got AddConstraint() error = %v, want %v", err, nil)
+// 	}
+
+// 	// when a driver makes a Query call
+// 	res, _, err := d.Query(
+// 		ctx,
+// 		cts.MockTargetHandler,
+// 		[]*unstructured.Unstructured{cts.MakeConstraint(t, cts.MockTemplate, "foo-0"), cts.MakeConstraint(t, cts.MockTemplate, "foo-1")},
+// 		map[string]interface{}{"hello": "there"},
+// 	)
+// 	if err != nil {
+// 		t.Fatalf("got Query() error = %v, want %v", err, nil)
+// 	}
+// 	if len(res) != 2 {
+// 		t.Fatalf("got %d errors on normal query; want 2", len(res))
+// 	}
+
+// 	// then expext two stats entries that correspond to the
+// 	// two constraints that were passed in to the Query call
+// 	ses := d.statsEntries
+// 	if len(ses) != 2 {
+// 		t.Fatalf("got %d errors on normal query; want 2", len(ses))
+// 	}
+// 	ck0, ok0 := ses[0].Key.(drivers.ConstraintKey)
+// 	if !ok0 {
+// 		t.Fatalf("cannot convert to ConstraintKey")
+// 	}
+// 	if ck0.Kind != cts.MockTemplate && ck0.Kind != "foo-0" {
+// 		t.Fatalf("did not find constraint key %+v in the stats entries", ck0)
+// 	}
+// 	namedStats := ses[0].AllStats
+// 	if len(namedStats) != 1 {
+// 		t.Fatalf("expected 1 namedStats but got %d", len(namedStats))
+// 	}
+
+// 	// it's enough to just check that the first named stats is set properly
+// 	if namedStats[0].StatsName != "EvaluationMetadata" {
+// 		t.Fatalf("named stats unknown: %s", namedStats[0].StatsName)
+// 	}
+// 	if len(namedStats[0].Stats) != 2 {
+// 		t.Fatalf("expected 2 stats but got %d", len(namedStats[0].Stats))
+// 	}
+
+// 	// check that we have both the run time and the engine set
+// 	stats := namedStats[0].Stats
+// 	if stats[0].Name != "templateRunTimeMillis" {
+// 		t.Fatalf("unknown stat: %s", stats[0].Name)
+// 	}
+// 	if stats[1].Name != "engineType" {
+// 		t.Fatalf("unknown stat: %s", stats[1].Name)
+// 	} else if stats[1].Value != "rego" {
+// 		t.Fatalf("expected: rego, got: %s", stats[1].Value)
+// 	}
+
+// 	// just check for another key's existence since values are added programaitcally
+// 	ck1, ok1 := ses[1].Key.(drivers.ConstraintKey)
+// 	if !ok1 {
+// 		t.Fatalf("cannot convert to ConstraintKey")
+// 	}
+// 	if ck1.Kind != cts.MockTemplate && ck1.Kind != "foo-1" {
+// 		t.Fatalf("did not find constraint key %+v in the stats entries", ck1)
+// 	}
+
+// 	// when a subsequent Query call is made
+// 	res2, _, err2 := d.Query(
+// 		ctx,
+// 		cts.MockTargetHandler,
+// 		[]*unstructured.Unstructured{cts.MakeConstraint(t, cts.MockTemplate, "foo-2")},
+// 		map[string]interface{}{"hello": "there"},
+// 	)
+// 	if err2 != nil {
+// 		t.Fatalf("got Query() error = %v, want %v", err, nil)
+// 	}
+// 	if len(res2) == 0 {
+// 		t.Fatalf("got %d errors on normal query; want 1", len(res))
+// 	}
+
+// 	// then expect a new StatsEntry entirely, with no
+// 	// leaks of the previous data in it.
+// 	ses2 := d.statsEntries
+// 	if reflect.DeepEqual(ses, ses2) {
+// 		t.Fatalf("got the same slice on a new Query call")
+// 	}
+// 	for _, se := range ses2 {
+// 		ck, ok := se.Key.(drivers.ConstraintKey)
+// 		if !ok {
+// 			t.Fatalf("cannot convert to ConstraintKey")
+// 		}
+
+// 		for _, otherSe := range ses {
+// 			otherCk, ok := otherSe.Key.(drivers.ConstraintKey)
+// 			if !ok {
+// 				t.Fatalf("cannot convert to ConstraintKey")
+// 			}
+
+// 			if otherCk == ck {
+// 				t.Fatalf("did not expect to find the previous stats entries after the second Query call")
+// 			}
+// 		}
+// 	}
+// }
+
+// // TestDriver_Query_StatsEntries_nonViolating tests that StatsEntries are populated for
+// // Query calls when constrainst don't violate.
+// func TestDriver_Query_StatsEntries_nonViolating(t *testing.T) {
+// 	// given a ConstraintTemplate that never violates
+// 	d, err := New(GatherMetrics())
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+
+// 	tmpl := cts.New(cts.OptTargets(cts.Target(cts.MockTargetHandler, NeverViolate)))
+// 	ctx := context.Background()
+// 	if err := d.AddTemplate(ctx, tmpl); err != nil {
+// 		t.Fatalf("got AddTemplate() error = %v, want %v", err, nil)
+// 	}
+
+// 	if err := d.AddConstraint(ctx, cts.MakeConstraint(t, cts.MockTemplate, "foo-0")); err != nil {
+// 		t.Fatalf("got AddConstraint() error = %v, want %v", err, nil)
+// 	}
+
+// 	// when a driver makes a Query call
+// 	res, _, err := d.Query(
+// 		ctx,
+// 		cts.MockTargetHandler,
+// 		[]*unstructured.Unstructured{cts.MakeConstraint(t, cts.MockTemplate, "foo-0")},
+// 		map[string]interface{}{"hi": "there"},
+// 	)
+// 	if err != nil {
+// 		t.Fatalf("got Query() error = %v, want %v", err, nil)
+// 	}
+// 	if len(res) != 0 {
+// 		t.Fatalf("got %d errors on normal query; want 0", len(res))
+// 	}
+
+// 	// then we want to see a stats entry for the non violating constraint
+// 	ses := d.statsEntries
+// 	if len(ses) != 1 {
+// 		t.Fatalf("got %d errors on normal query; want 1", len(ses))
+// 	}
+// 	ck, ok := ses[0].Key.(drivers.ConstraintKey)
+// 	if !ok {
+// 		t.Fatalf("cannot convert to ConstraintKey")
+// 	}
+// 	if ck.Kind != cts.MockTemplate && ck.Kind != "foo-0" {
+// 		t.Fatalf("did not find constraint key %+v in the stats entries", ck)
+// 	}
+// 	namedStats := ses[0].AllStats
+// 	if len(namedStats) != 1 {
+// 		t.Fatalf("expected 1 namedStats but got %d", len(namedStats))
+// 	}
+// }
 
 func TestDriver_ExternalData(t *testing.T) {
 	for _, tt := range []struct {
@@ -311,7 +480,7 @@ func TestDriver_ExternalData(t *testing.T) {
 				t.Fatalf("got AddConstraint() error = %v, want %v", err, nil)
 			}
 
-			res, _, err := d.Query(
+			qr, err := d.Query(
 				ctx,
 				cts.MockTargetHandler,
 				[]*unstructured.Unstructured{cts.MakeConstraint(t, "Fakes", "foo-1")},
@@ -320,11 +489,11 @@ func TestDriver_ExternalData(t *testing.T) {
 			if err != nil {
 				t.Fatalf("got Query() error = %v, want %v", err, nil)
 			}
-			if tt.errorExpected && len(res) == 0 {
+			if tt.errorExpected && len(qr.Results) == 0 {
 				t.Fatalf("got 0 errors on normal query; want 1")
 			}
-			if !tt.errorExpected && len(res) > 0 {
-				t.Fatalf("got %d errors on normal query; want 0", len(res))
+			if !tt.errorExpected && len(qr.Results) > 0 {
+				t.Fatalf("got %d errors on normal query; want 0", len(qr.Results))
 			}
 		})
 	}

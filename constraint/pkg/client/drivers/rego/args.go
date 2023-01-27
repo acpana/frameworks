@@ -154,6 +154,16 @@ func Externs(externs ...string) Arg {
 	}
 }
 
+// GatherMetrics starts collecting the various metrics around the
+// underlying engine's eval() calls.
+func GatherMetrics() Arg {
+	return func(driver *Driver) error {
+		driver.gatherMetrics = true
+
+		return nil
+	}
+}
+
 // Currently rules should only access data.inventory.
 var validDataFields = map[string]bool{
 	"inventory": true,
