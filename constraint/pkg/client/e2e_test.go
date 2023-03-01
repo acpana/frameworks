@@ -787,8 +787,6 @@ func TestE2E_DriverCfg(t *testing.T) {
 // In particular, this test makes sure we have stats for both violating constraint kind, name pairs
 // and non violating ones.
 func TestE2E_Review_StatsEntries(t *testing.T) {
-	t.Skip("todo while rebasing")
-	
 	ctx := context.Background()
 	d, err := rego.New(rego.GatherMetrics())
 	if err != nil {

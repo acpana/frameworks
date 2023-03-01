@@ -11,6 +11,7 @@ import (
 	apiconstraints "github.com/open-policy-agent/frameworks/constraint/pkg/apis/constraints"
 	"github.com/open-policy-agent/frameworks/constraint/pkg/client/crds"
 	"github.com/open-policy-agent/frameworks/constraint/pkg/client/drivers"
+	"github.com/open-policy-agent/frameworks/constraint/pkg/client/drivers/rego"
 	regoSchema "github.com/open-policy-agent/frameworks/constraint/pkg/client/drivers/rego/schema"
 	"github.com/open-policy-agent/frameworks/constraint/pkg/client/errors"
 	clienterrors "github.com/open-policy-agent/frameworks/constraint/pkg/client/errors"
@@ -778,24 +779,32 @@ func (c *Client) Dump(ctx context.Context) (string, error) {
 
 func (c *Client) GetDescriptionForStat(source instrumentation.Source, statName string) string {
 	if source.Type != instrumentation.EngineSourceType {
+		// only handle engine source for now
 		return instrumentation.UnknownDescription
 	}
 
-	// TODO use source.Value once rebased on
-	// https://github.com/open-policy-agent/frameworks/pull/293
-	switch source.Value {
-	case "rego":
-		// TODO rework
-		// desc, err := d.GetDescriptionForStat(statName)
-		// if err != nil {
-		// 	return instrumentation.UnknownDescription
-		// }
+	// this is written in a general form
+	// but it only works for rego drivers for now.
+	for dName, d := range c.drivers {
+		if strings.EqualFold(dName, source.Value) {
+			if source.Value == instrumentation.RegoSource.Value {
+				// no other drivers implement the GetDescriptionForStat yet
+				regoD, ok := d.(*rego.Driver)
+				if !ok {
+					return instrumentation.UnknownDescription
+				}
 
-		// return desc
-		return instrumentation.UnknownDescription
-	default:
-		return instrumentation.UnknownDescription
+				desc, err := regoD.GetDescriptionForStat(statName)
+				if err != nil {
+					return instrumentation.UnknownDescription
+				}
+
+				return desc
+			}
+		}
 	}
+
+	return instrumentation.UnknownDescription
 }
 
 // knownTargets returns a sorted list of known target names.
